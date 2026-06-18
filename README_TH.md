@@ -168,6 +168,30 @@ python3 api_server.py
       "stream": false
     }'
   ```
+* **ตัวอย่างผลลัพธ์ที่ได้รับ (Response Example):**
+  ```json
+  {
+    "id": "chatcmpl--8658571592482874660",
+    "object": "chat.completion",
+    "created": 1781745295,
+    "model": "gemini-3-flash-thinking",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "**เข้าใจในระดับหนึ่ง แต่ไม่ใช่แบบที่มนุษย์เข้าใจกัน** \n\nแมวไม่ได้เข้าใจภาษาพูดหรือความหมายของคำศัพท์ (ยกเว้นชื่อตัวเองหรือคำสั้นๆ ที่เชื่อมโยงกับอาหาร/รางวัล) แต่พวกมันเชี่ยวชาญเรื่องการ**อ่านภาษากาย น้ำเสียง และอารมณ์**ของทาส..."
+        },
+        "finish_reason": "stop"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 8,
+      "completion_tokens": 163,
+      "total_tokens": 172
+    }
+  }
+  ```
 
 ### B. บริการสร้างรูปภาพ (Image Generation)
 * **Endpoint:** `POST http://127.0.0.1:8000/v1/images/generations`
@@ -176,18 +200,46 @@ python3 api_server.py
   - `size`: ขนาด/อัตราส่วนภาพที่ต้องการสร้าง (เช่น `"1024x1024"`, `"16:9"`, `"9:16"`, `"4:3"`) **(หากไม่ส่งค่านี้มา ระบบจะตั้งค่าเริ่มต้นเป็น `"1024x1024"` โดยอัตโนมัติ)**
   - `image` *(ไม่บังคับ)*: ลิงก์ URL ของรูปภาพต้นแบบ หรือ Base64 Data URL ของรูปภาพที่ต้องการใช้อ้างอิง/ดัดแปลงในการสร้างภาพใหม่
   - *ระบบจะทำการแปลงค่า `size` ให้เป็นคำสั่งสัดส่วนภาพและแทรกลงใน Prompt ส่งไปยังโมเดล Imagen 3 ของ Google ให้อัตโนมัติ*
-* **ตัวอย่างการส่ง Prompt สร้างภาพพร้อมแนบภาพต้นแบบ:**
+* **ตัวอย่างการส่ง Prompt สร้างภาพทั่วไป (Text-to-Image):**
   ```bash
   curl http://127.0.0.1:8000/v1/images/generations \
     -H "Content-Type: application/json" \
     -d '{
-      "prompt": "change the background of this image to a neon cyberpunk city",
-      "n": 1,
+      "prompt": "a beautiful high quality image of a cybernetic cyberpunk cat on neon streets",
+      "size": "1024x1024"
+    }'
+  ```
+* **ตัวอย่างการส่ง Prompt สร้างภาพพร้อมแนบลิงก์รูปภาพอ้างอิง (Image URL Reference):**
+  ```bash
+  curl http://127.0.0.1:8000/v1/images/generations \
+    -H "Content-Type: application/json" \
+    -d '{
+      "prompt": "change the background of this image to a vibrant neon cyberpunk city, night time",
+      "size": "1024x1024",
+      "image": "https://picsum.photos/id/237/1024/1024"
+    }'
+  ```
+* **ตัวอย่างการส่ง Prompt สร้างภาพพร้อมแนบไฟล์รูปภาพอ้างอิงจากเครื่อง (Base64 Reference):**
+  ```bash
+  curl http://127.0.0.1:8000/v1/images/generations \
+    -H "Content-Type: application/json" \
+    -d '{
+      "prompt": "add a futuristic cybernetic visor onto the face of the cat in this image",
       "size": "1024x1024",
       "image": "data:image/png;base64,iVBORw0KGgoAAA..."
     }'
   ```
-* **ผลลัพธ์:** จะได้รับ JSON ที่มีลิงก์ URL ของภาพที่สร้างเสร็จในส่วนของ `data`
+* **ตัวอย่างผลลัพธ์ที่ได้รับ (Response Example):**
+  ```json
+  {
+    "created": 1781745965,
+    "data": [
+      {
+        "url": "https://lh3.googleusercontent.com/gg-dl/AFfU-fLOZByHPcweDqQh_5r0pUf2fPzslgEUH0wRh5NJqL8f_n14cVNdKN5Iv6ExlkrUSfn2r789POIK6oexb51KOYsT33pcS-CXiyQqwgKK27_-1xWscIMzLcw_Pn_nwleU4WJBJQt43jjTjxu8CuNxxh4PDWLr_3sXVXRc5Iny8q2bBeIPow"
+      }
+    ]
+  }
+  ```
 
 ---
 

@@ -1,0 +1,124 @@
+openapi: 3.0.3
+info:
+  title: Gemini Web API - Image Generation Spec
+  description: OpenAPI Specification for the `/v1/images/generations` route in the Gemini Web API gateway, simulating OpenAI compatible Image API.
+  version: 1.0.0
+servers:
+  - url: http://127.0.0.1:8000
+    description: Local API Gateway
+paths:
+  /v1/images/generations:
+    post:
+      tags:
+        - Images
+      summary: Generate Images
+      description: |
+        Generates images using Google's Imagen 3 model via the Gemini Web API. 
+        It simulates the OpenAI `/v1/images/generations` API format.
+        You can pass a custom aspect ratio (via the `size` parameter) and an optional base64 image or image URL to use as reference.
+      operationId: generateImages
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImageGenerationRequest'
+      responses:
+        '200':
+          description: Successful image generation response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageGenerationResponse'
+        '400':
+          description: Invalid request or no image generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '500':
+          description: Internal server error or Gemini API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '503':
+          description: Client not initialized or authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+
+components:
+  schemas:
+    ImageGenerationRequest:
+      type: object
+      required:
+        - prompt
+      properties:
+        prompt:
+          type: string
+          description: The text description of the image to generate. Max length depends on Gemini's prompt limit.
+          example: "a cute cat wearing a cybernetic spacesuit on mars"
+        n:
+          type: integer
+          description: Number of images to generate (supported value is usually 1 since it grabs from response)
+          default: 1
+          example: 1
+        size:
+          type: string
+          description: |
+            The size or aspect ratio of the image. Standard sizes are converted to Aspect Ratio descriptions for Gemini.
+            Supported sizes: `1024x1024` (1:1 square), `1600x900` (16:9 widescreen), `1920x1080` (16:9 widescreen), `900x1600` (9:16 vertical), `1080x1920` (9:16 vertical), `4:3`, `3:2`, `16:9`, `9:16`, `1:1`.
+          default: "1024x1024"
+          example: "1024x1024"
+        response_format:
+          type: string
+          description: Format of the returned images. Currently only `url` is supported.
+          default: "url"
+          example: "url"
+        model:
+          type: string
+          description: Model to use. Defaults to `dall-e-3` for OpenAI compatibility, mapping internally to Imagen 3.
+          default: "dall-e-3"
+          example: "dall-e-3"
+        image:
+          type: string
+          description: |
+            Optional reference image. Can be:
+            1. A standard web URL pointing to an image (http:// or https://)
+            2. A Base64 Data URL (e.g. `data:image/png;base64,...`)
+          example: null
+
+    ImageURL:
+      type: object
+      required:
+        - url
+      properties:
+        url:
+          type: string
+          format: uri
+          description: The URL of the generated image.
+          example: "https://lh3.googleusercontent.com/d/..."
+
+    ImageGenerationResponse:
+      type: object
+      required:
+        - created
+        - data
+      properties:
+        created:
+          type: integer
+          description: Unix timestamp of the request.
+          example: 1686915000
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImageURL'
+
+    HTTPValidationError:
+      type: object
+      properties:
+        detail:
+          type: string
+          example: "Error message details"

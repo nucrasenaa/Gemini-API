@@ -41,27 +41,30 @@ def load_env_file(dotenv_path=".env"):
 
 load_env_file()
 
-# ดึงค่าคุกกี้
-SECURE_1PSID = os.getenv("SECURE_1PSID")
-SECURE_1PSIDTS = os.getenv("SECURE_1PSIDTS")
+# ดึงค่าคุกกี้ (พยายามดึงจาก cookies.json ก่อน เพราะมักเป็นไฟล์ที่อัปเดตบ่อยกว่า)
+SECURE_1PSID = None
+SECURE_1PSIDTS = None
 
-# ถ้าไม่มี .env ลองดึงจาก cookies.json
+cookies_json_path = Path("cookies.json")
+if cookies_json_path.exists():
+    try:
+        data = json.loads(cookies_json_path.read_text(encoding="utf-8"))
+        if isinstance(data, list):
+            for item in data:
+                if item.get("name") == "__Secure-1PSID":
+                    SECURE_1PSID = item.get("value")
+                elif item.get("name") == "__Secure-1PSIDTS":
+                    SECURE_1PSIDTS = item.get("value")
+        elif isinstance(data, dict):
+            SECURE_1PSID = data.get("__Secure-1PSID") or data.get("cookies", {}).get("__Secure-1PSID")
+            SECURE_1PSIDTS = data.get("__Secure-1PSIDTS") or data.get("cookies", {}).get("__Secure-1PSIDTS")
+    except Exception as e:
+        print(f"⚠️ ไม่สามารถอ่านคุกกี้จาก cookies.json ได้: {e}")
+
+# หากไม่มีใน cookies.json ให้ลองดึงจาก Environment / .env
 if not SECURE_1PSID:
-    cookies_json_path = Path("cookies.json")
-    if cookies_json_path.exists():
-        try:
-            data = json.loads(cookies_json_path.read_text(encoding="utf-8"))
-            if isinstance(data, list):
-                for item in data:
-                    if item.get("name") == "__Secure-1PSID":
-                        SECURE_1PSID = item.get("value")
-                    elif item.get("name") == "__Secure-1PSIDTS":
-                        SECURE_1PSIDTS = item.get("value")
-            elif isinstance(data, dict):
-                SECURE_1PSID = data.get("__Secure-1PSID") or data.get("cookies", {}).get("__Secure-1PSID")
-                SECURE_1PSIDTS = data.get("__Secure-1PSIDTS") or data.get("cookies", {}).get("__Secure-1PSIDTS")
-        except Exception as e:
-            print(f"⚠️ ไม่สามารถอ่านคุกกี้จาก cookies.json ได้: {e}")
+    SECURE_1PSID = os.getenv("SECURE_1PSID")
+    SECURE_1PSIDTS = os.getenv("SECURE_1PSIDTS")
 
 # ---------------------------------------------------------------------------
 # FastAPI initialization
@@ -326,6 +329,7 @@ async def chat_completions(request: ChatCompletionRequest):
     if not client:
         raise HTTPException(status_code=503, detail="Gemini client is not initialized or authenticated.")
         
+    logger.info(f"📥 Incoming Chat Request | Model: {request.model} | Stream: {request.stream} | Messages: {len(request.messages)}")
     messages_dict = []
     for m in request.messages:
         messages_dict.append({
@@ -407,7 +411,7 @@ async def chat_completions(request: ChatCompletionRequest):
             
     # 3. ส่วนของการส่งข้อมูลและส่งกลับ (Streaming / Non-Streaming)
     logger.info(f"📤 Outgoing Model: {model_enum.name if hasattr(model_enum, 'name') else model_enum} | Prompt Length: {len(last_user_message)}")
-    logger.debug(f"📝 Full Outgoing Prompt:\n{last_user_message}")
+    logger.info(f"📝 Full Outgoing Prompt:\n{last_user_message}")
     created_time = int(time.time())
     completion_id = f"chatcmpl-{hash(last_user_message)}"
     
@@ -459,6 +463,8 @@ async def chat_completions(request: ChatCompletionRequest):
                     # ลบของเก่าออกเพื่อไม่ให้เปลืองเมมโมรี่ (ถ้ามี)
                     if prefix_hash and prefix_hash in session_cache:
                         session_cache.pop(prefix_hash, None)
+                
+                logger.info(f"📥 Stream response completed. Content:\n{full_response_text}")
                 
                 # ส่งจบสตรีม
                 final_chunk = {
@@ -513,6 +519,7 @@ async def chat_completions(request: ChatCompletionRequest):
         try:
             response = await chat_session.send_message(last_user_message, files=files_to_upload or None)
             full_response_text = response.text
+            logger.info(f"📥 Response content:\n{full_response_text}")
             
             # อัปเดตลงแคช
             full_conversation = messages_dict + [{"role": "assistant", "content": full_response_text}]
@@ -563,6 +570,8 @@ async def generate_images(request: ImageGenerationRequest):
     if not client:
         raise HTTPException(status_code=503, detail="Gemini client is not initialized or authenticated.")
         
+    ref_img_log = f"{request.image[:60]}... [truncated]" if request.image else "None"
+    logger.info(f"📥 Incoming Image Gen Request | Prompt: {request.prompt} | Size: {request.size} | Model: {request.model} | Image: {ref_img_log}")
     prompt = request.prompt
     # ดึงค่า size หรือใช้ default 1024x1024
     size = request.size or "1024x1024"
@@ -632,7 +641,7 @@ async def generate_images(request: ImageGenerationRequest):
     logger.info(f"🎨 Generating image via Web API with prompt: {prompt} | requested size: {size} | reference image: {bool(files_to_upload)}")
     
     try:
-        response = await client.generate_content(prompt, files=files_to_upload or None)
+        response = await client.generate_content(prompt, model="gemini-3-flash", files=files_to_upload or None)
         
         if not response.images:
             raise HTTPException(
@@ -643,6 +652,8 @@ async def generate_images(request: ImageGenerationRequest):
         data_list = []
         for img in response.images:
             data_list.append({"url": img.url})
+            
+        logger.info(f"📥 Image generated successfully. URLs: {[img['url'] for img in data_list]}")
             
         # คืนค่าตามโครงสร้างมาตรฐานของ OpenAI Images API
         return {
